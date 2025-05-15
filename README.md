@@ -1,5 +1,7 @@
-![image](https://github.com/user-attachments/assets/dfa3e178-57dd-4fe6-95b4-73cfec587b19)# seoul_education_proj
-제7회 서울교육 데이터 분석·활용 아이디어 공모전
+![image](https://github.com/user-attachments/assets/dfa3e178-57dd-4fe6-95b4-73cfec587b19)
+
+# 제7회 서울교육 데이터 분석·활용 아이디어 공모전
+
 https://www.all-con.co.kr/view/contest/524476?page=1&sortname=cl_order&sortorder=asc&stx=%EB%8D%B0%EC%9D%B4%ED%84%B0
 
 
