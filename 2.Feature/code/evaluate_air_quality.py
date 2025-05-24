@@ -1,3 +1,6 @@
+import pandas as pd
+import numpy as np
+
 # 함수: 미세먼지(PM10) 단계 평가
 def evaluate_pm10(value):
     if pd.isna(value) or value == "":
