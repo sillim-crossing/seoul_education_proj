@@ -300,3 +300,139 @@ def visualize_district_analysis(results):
         plt.show()
     else:
         print("자치구별 항목별 부적합률을 표시할 충분한 데이터가 없습니다.")
+
+# 추가: 공기질 항목별 지역 분포 시각화 함수
+def visualize_pollutant_distribution_by_district(results):
+    """공기질 항목별 지역 분포를 시각화하는 함수"""
+
+    # 유효한 자치구 필터링
+    district_counts = results['자치구'].value_counts()
+    valid_districts = district_counts[district_counts >= 3].index.tolist()
+    valid_districts = [d for d in valid_districts if d != "정보 없음"]
+
+    if len(valid_districts) < 3:
+        print("자치구 정보가 충분하지 않습니다. 데이터를 확인해주세요.")
+        return
+
+    filtered_results = results[results['자치구'].isin(valid_districts)]
+
+    # 분석할 오염물질 및 설명
+    pollutants = [
+        {'col': 'PM10_교실_최대값', 'name': '미세먼지(PM10)', 'unit': 'μg/㎥',
+         'limit': 75, 'who_limit': 50, 'cmap': 'YlOrRd'},
+        {'col': 'PM2.5_최대값', 'name': '초미세먼지(PM2.5)', 'unit': 'μg/㎥',
+         'limit': 35, 'who_limit': 25, 'cmap': 'YlOrRd'},
+        {'col': 'CO2_최대값', 'name': '이산화탄소(CO2)', 'unit': 'ppm',
+         'limit': 1500, 'who_limit': 1000, 'cmap': 'YlOrRd'},
+        {'col': 'CO_최대값', 'name': '일산화탄소(CO)', 'unit': 'ppm',
+         'limit': 10, 'who_limit': 5, 'cmap': 'YlOrRd'},
+        {'col': 'NO2_최대값', 'name': '이산화질소(NO2)', 'unit': 'ppm',
+         'limit': 0.05, 'who_limit': 0.03, 'cmap': 'YlOrRd'},
+        {'col': 'O3_최대값', 'name': '오존(O3)', 'unit': 'ppm',
+         'limit': 0.06, 'who_limit': 0.03, 'cmap': 'YlOrRd'}
+    ]
+
+    # 각 오염물질에 대해 지역별 분포 시각화
+    for pollutant in pollutants:
+        col = pollutant['col']
+
+        # 해당 항목에 데이터가 충분한지 확인
+        valid_data = filtered_results[pd.notna(filtered_results[col])]
+        if len(valid_data) < 10:
+            continue
+
+        # 1. 자치구별 해당 오염물질 농도 분포 (박스플롯)
+        plt.figure(figsize=(14, 8))
+        sns.boxplot(x='자치구', y=col, data=valid_data, palette='YlOrRd_r')
+        plt.title(f'자치구별 {pollutant["name"]} 농도 분포', fontsize=16)
+        plt.xlabel('자치구', fontsize=14)
+        plt.ylabel(f'{pollutant["name"]} 농도({pollutant["unit"]})', fontsize=14)
+        plt.axhline(y=pollutant['limit'], color='red', linestyle='--',
+                   label=f'적합 기준({pollutant["limit"]}{pollutant["unit"]})')
+        plt.axhline(y=pollutant['who_limit'], color='orange', linestyle='--',
+                   label=f'권고 기준({pollutant["who_limit"]}{pollutant["unit"]})')
+        plt.legend(fontsize=12)
+        plt.xticks(rotation=45, ha='right')
+        plt.grid(axis='y', linestyle='--', alpha=0.7)
+        plt.tight_layout()
+        plt.show()
+
+        # 2. 자치구별 해당 오염물질 농도 평균 (바 차트)
+        plt.figure(figsize=(14, 8))
+        district_avg = valid_data.groupby('자치구')[col].mean().sort_values(ascending=False)
+
+        # 색상 맵 설정 (값에 따라)
+        norm = plt.Normalize(district_avg.min(), max(district_avg.max(), pollutant['limit'] * 1.2))
+        colors = plt.cm.get_cmap(pollutant['cmap'])(norm(district_avg.values))
+
+        ax = district_avg.plot(kind='bar', color=colors, figsize=(14, 8))
+        plt.title(f'자치구별 {pollutant["name"]} 평균 농도', fontsize=16)
+        plt.xlabel('자치구', fontsize=14)
+        plt.ylabel(f'{pollutant["name"]} 농도({pollutant["unit"]})', fontsize=14)
+        plt.axhline(y=pollutant['limit'], color='red', linestyle='--',
+                   label=f'적합 기준({pollutant["limit"]}{pollutant["unit"]})')
+        plt.axhline(y=pollutant['who_limit'], color='orange', linestyle='--',
+                   label=f'권고 기준({pollutant["who_limit"]}{pollutant["unit"]})')
+
+        # 서울시 평균 표시
+        seoul_avg = valid_data[col].mean()
+        plt.axhline(y=seoul_avg, color='green', linestyle='-.',
+                   label=f'서울시 평균: {seoul_avg:.2f}{pollutant["unit"]}')
+
+        plt.legend(fontsize=12)
+        plt.xticks(rotation=45, ha='right', fontsize=12)
+        plt.grid(axis='y', linestyle='--', alpha=0.7)
+
+        # 값 표시
+        for i, v in enumerate(district_avg):
+            ax.text(i, v + (pollutant['limit'] * 0.02), f'{v:.2f}', ha='center', fontsize=11)
+
+        plt.tight_layout()
+        plt.show()
+
+        # 3. 자치구별 해당 오염물질 적합/부적합 비율 (스택 바 차트)
+        if f'{pollutant["name"].split("(")[0]}_적합성' in filtered_results.columns:
+            suitability_col = f'{pollutant["name"].split("(")[0]}_적합성'
+
+            plt.figure(figsize=(14, 8))
+            district_suitability = pd.crosstab(
+                filtered_results['자치구'],
+                filtered_results[suitability_col],
+                normalize='index'
+            ) * 100
+
+            # '데이터 없음' 열이 있으면 제거
+            if '데이터 없음' in district_suitability.columns:
+                district_suitability = district_suitability.drop('데이터 없음', axis=1)
+
+            # 종합점수 평균 기준으로 자치구 정렬
+            district_order = filtered_results.groupby('자치구')['종합_점수'].mean().sort_values(ascending=False).index
+            district_order = [d for d in district_order if d in district_suitability.index]
+            district_suitability = district_suitability.reindex(district_order)
+
+            # 적합/부적합 컬럼이 모두 있는지 확인
+            if '적합' not in district_suitability.columns:
+                district_suitability['적합'] = 0
+            if '부적합' not in district_suitability.columns:
+                district_suitability['부적합'] = 0
+
+            # 컬럼 순서 지정
+            district_suitability = district_suitability[['적합', '부적합']]
+
+            # 스택 바 차트 그리기
+            district_suitability.plot(
+                kind='bar',
+                stacked=True,
+                color=['lightgreen', 'red'],
+                figsize=(14, 8)
+            )
+
+            plt.title(f'자치구별 {pollutant["name"]} 적합/부적합 비율', fontsize=16)
+            plt.xlabel('자치구', fontsize=14)
+            plt.ylabel('비율 (%)', fontsize=14)
+            plt.xticks(rotation=45, ha='right', fontsize=12)
+            plt.legend(title='적합 여부', fontsize=12)
+            plt.grid(axis='y', linestyle='--', alpha=0.3)
+            plt.tight_layout()
+            plt.show()
+
